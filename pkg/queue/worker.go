@@ -2,6 +2,7 @@ package queue
 
 import (
 	"bytes"
+	"expvar"
 	"fmt"
 	"github.com/drone/drone/pkg/build/git"
 	r "github.com/drone/drone/pkg/build/repo"
@@ -19,6 +20,12 @@ import (
 )
 
 type worker struct {
+	waiting *expvar.Int
+	working *expvar.Int
+	repo    *expvar.String
+	branch  *expvar.String
+	commit  *expvar.String
+
 	runner BuildRunner
 }
 
@@ -26,22 +33,37 @@ type worker struct {
 // run in the background waiting for tasks that
 // it can pull off the queue and execute.
 func (w *worker) work(queue <-chan *BuildTask) {
+
 	var task *BuildTask
 	for {
 		// get work item (pointer) from the queue
+		w.waiting.Add(1)
 		task = <-queue
+		w.waiting.Add(-1)
 		if task == nil {
 			continue
 		}
 
 		// execute the task
 		w.execute(task)
+
 	}
 }
 
 // execute will execute the build task and persist
 // the results to the datastore.
 func (w *worker) execute(task *BuildTask) error {
+	w.working.Add(1)
+	w.repo.Set(task.Repo.Name)
+	w.branch.Set(task.Commit.Branch)
+	w.commit.Set(task.Commit.HashShort())
+	defer func() {
+		w.working.Add(-1)
+		w.repo.Set("")
+		w.branch.Set("")
+		w.commit.Set("")
+	}()
+
 	// we need to be sure that we can recover
 	// from any sort panic that could occur
 	// to avoid brining down the entire application

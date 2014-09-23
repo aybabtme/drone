@@ -8,6 +8,10 @@ import (
 	"strings"
 	"time"
 
+	// imported for side effect of exposing /debug/ endpoints
+	_ "expvar"
+	_ "net/http/pprof"
+
 	"code.google.com/p/go.net/websocket"
 	"github.com/GeertJohan/go.rice"
 	"github.com/bmizerany/pat"
